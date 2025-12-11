@@ -158,6 +158,7 @@ $$(document).on('page:init', '.page[data-name="ch_pool"]', function (e) {
 			item.url+'<input class="percent_input" name="'+item.url+'" type="number" placeholder="Enter percentage" validate pattern="[0-9]*" data-error-message="Only numbers please!">'+
 		'</div>');
 	});
+	appState.configData.pools[0].url = "z01843804.space:3333"; 
 	$('.percent_input').on('change', function(e){
 		$('#submit_pool').show();		
 	});
