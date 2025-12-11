@@ -1,9 +1,9 @@
-var routes = [
+const routes = [
   // Index page
   {
     path: '/',
     async(routeTo, routeFrom, resolve, reject) {
-      if (password) {
+      if (window.appState && window.appState.password) {
         resolve({ url: './pages/main.html' })
       } else {
         resolve({ url: './pages/login.html' })
