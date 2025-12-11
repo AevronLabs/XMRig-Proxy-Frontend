@@ -216,53 +216,53 @@ $$(document).on('page:init', '.page[data-name="ch_pool"]', function (e) {
 })
 
 //-- Settings page Init
-$$(document).on('page:init', '.page[data-name="settings"]', function (e) {	
-	get_data();	
-	$$('.delete_file').on("click", function(e){	
-		delete_file($(this).data().name, $(this).data().file, appState.proxyId)
-	});	
-	$$('.title_proxy').html("Proxy <b>" + appState.configData.proxy_infos[appState.proxyId].label +"</b>" );
-	$.each( appState.configData, function( key, val ){				
-		if(typeof val === 'object'){
-			$.each( val, function( k, v ){
-				if(key == "pools"){
-					//console.log(v["url"]);
-				}
-				if(key == "api")$("[name='api:"+k+"']").val(v);
-			});	
-		}else{
-			if(val === true){
-				$("[name='"+key+"']").prop("checked",true);
-			}else{	
-				$("[name='"+key+"']").val(val);
-			}
-		}
-	});
+// $$(document).on('page:init', '.page[data-name="settings"]', function (e) {	
+// 	get_data();	
+// 	$$('.delete_file').on("click", function(e){	
+// 		delete_file($(this).data().name, $(this).data().file, appState.proxyId)
+// 	});	
+// 	$$('.title_proxy').html("Proxy <b>" + appState.configData.proxy_infos[appState.proxyId].label +"</b>" );
+// 	$.each( appState.configData, function( key, val ){				
+// 		if(typeof val === 'object'){
+// 			$.each( val, function( k, v ){
+// 				if(key == "pools"){
+// 					//console.log(v["url"]);
+// 				}
+// 				if(key == "api")$("[name='api:"+k+"']").val(v);
+// 			});	
+// 		}else{
+// 			if(val === true){
+// 				$("[name='"+key+"']").prop("checked",true);
+// 			}else{	
+// 				$("[name='"+key+"']").val(val);
+// 			}
+// 		}
+// 	});
 	
-	$("#proxy-form-settings :input").on("change",function(){ $('#submit').show() });
+// 	$("#proxy-form-settings :input").on("change",function(){ $('#submit').show() });
 	
-	$('#submit').on("click", function(){
-		app.dialog.preloader('Sending datas...');
-		var formData = app.form.convertToData("#proxy-form-settings");
-		$.each( formData, function(key, val ){
-			if(Array.isArray(val)){ // for f7 checkbox
-				if(val.length > 0) val = true; else val = false;
-			}
-			if(key.indexOf(':') >= 0){
-				appState.configData[key.split(":")[0] ][key.split(":")[1]] = val;
-			}else{
-				appState.configData[key] = val;
-			}
-		});
+// 	$('#submit').on("click", function(){
+// 		app.dialog.preloader('Sending datas...');
+// 		var formData = app.form.convertToData("#proxy-form-settings");
+// 		$.each( formData, function(key, val ){
+// 			if(Array.isArray(val)){ // for f7 checkbox
+// 				if(val.length > 0) val = true; else val = false;
+// 			}
+// 			if(key.indexOf(':') >= 0){
+// 				appState.configData[key.split(":")[0] ][key.split(":")[1]] = val;
+// 			}else{
+// 				appState.configData[key] = val;
+// 			}
+// 		});
 
-		app.request.post('php/get_json.php', {cc:"put_data",  mode:'setting', proxy: appState.proxyId, proxy_config_data:appState.configData}, function (data) {
-			app.dialog.close();
-			app.notification.create({text: 'Settings saved successfully'}).open();
-			$('#submit').hide();
-		},"json");
+// 		app.request.post('php/get_json.php', {cc:"put_data",  mode:'setting', proxy: appState.proxyId, proxy_config_data:appState.configData}, function (data) {
+// 			app.dialog.close();
+// 			app.notification.create({text: 'Settings saved successfully'}).open();
+// 			$('#submit').hide();
+// 		},"json");
 		
-	});
-})
+// 	});
+// })
 
 //-- History Page Init
 $$(document).on('page:init', '.page[data-name="history"]', function (e) {
