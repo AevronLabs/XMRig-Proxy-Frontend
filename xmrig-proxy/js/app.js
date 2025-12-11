@@ -1,123 +1,157 @@
 // Dom7
-var $$ = Dom7;
+const $$ = Dom7;
 
 // Init App
-var app = new Framework7({
+const app = new Framework7({
   id: 'io.framework7.proxy',
   root: '#app',
   name: 'XMRig Proxy',
   theme: 'auto',
   routes: routes,
   notification: {
-	title: '',
-	titleRightText: '',
-	subtitle: '',
-	icon: '<i class="icon icon-xmrig"></i>',
-	closeTimeout: 3000,
+        title: '',
+        titleRightText: '',
+        subtitle: '',
+        icon: '<i class="icon icon-xmrig"></i>',
+        closeTimeout: 3000,
   }
 });
 
-var password = false;
-if(localStorage.getItem('save-pass') == "true") password = localStorage.getItem('xmrig-pass');
-var mainView = app.views.create('.view-main', {url: '/'});
-var proxy_id = 0;
-var refresh = false;
-var configTimer = false;
-var config_data = {};
-var proxy_data = {};
-var data_session = { "workers_set":[ {"sort_id":"12","sort_order":"asc"} ] };
-var days = 1;
-var refresh_ms = 35000;
-window.onresize = function() { Plotly.Plots.resize('proxy_hashrate'); }
+const appState = {
+        password: localStorage.getItem('save-pass') === 'true' ? localStorage.getItem('xmrig-pass') : false,
+        proxyId: 0,
+        refresh: () => {},
+        configTimer: null,
+        configData: {},
+        proxyData: {},
+        dataSession: { workers_set: { sort_id: '12', sort_order: 'asc' } },
+        days: 1,
+        refreshMs: 35000,
+};
+window.appState = appState;
+
+const mainView = app.views.create('.view-main', { url: '/' });
+
+window.onresize = () => { Plotly.Plots.resize('proxy_hashrate'); };
+
+if (appState.password) {
+        setPassword(appState.password);
+}
+
+function setPassword(newPassword) {
+        appState.password = newPassword;
+        if (newPassword) {
+                app.request.setup({ headers: { Authorization: newPassword } });
+        }
+}
+
+function scheduleRefresh(callback) {
+        if (appState.configTimer) {
+                clearInterval(appState.configTimer);
+        }
+        appState.refresh = callback;
+        appState.configTimer = setInterval(() => callback(), appState.refreshMs);
+}
+
+function updateProxyTitle(target) {
+        if (!appState.configData.proxy_infos || !appState.configData.proxy_infos[appState.proxyId]) return;
+        $$(target).html(`Proxy <b>${appState.configData.proxy_infos[appState.proxyId].label}</b>`);
+}
 
 //-- Login Page Init
 $$(document).on('page:init', '.page[data-name="login"]', function (e) {
-	$('#enter_pass').on("click",function(){
-		password = window.btoa( $$('input[name=password]').val() );
-		app.request({url:'php/get_json.php', method:"POST", data:{cc:"check_password"}, headers:{'Authorization': password}, dataType:"json", 
-			success: function (data) {
-				if(data == true){
-					if($$('input[name=keep_logged]').prop('checked') === true){
-						localStorage.setItem('save-pass', true);
-						localStorage.setItem('xmrig-pass', password);
-					}
-					mainView.router.refreshPage();
-				}else{
-					app.dialog.alert('Wrong Password!');
-					$$('input[name=password]').val("");
-				}
-			},error: function(xhr, status){
-				net_fail();
-			}
-		});	
-	});
+        $('#enter_pass').on('click', () => {
+                const encodedPassword = window.btoa($$('input[name=password]').val());
+                setPassword(encodedPassword);
+                app.request({
+                        url: 'php/get_json.php',
+                        method: 'POST',
+                        data: { cc: 'check_password' },
+                        headers: { Authorization: appState.password },
+                        dataType: 'json',
+                        success(data) {
+                                if (data === true) {
+                                        if ($$('input[name=keep_logged]').prop('checked') === true) {
+                                                localStorage.setItem('save-pass', true);
+                                                localStorage.setItem('xmrig-pass', appState.password);
+                                        }
+                                        mainView.router.refreshPage();
+                                } else {
+                                        app.dialog.alert('Wrong Password!');
+                                        $$('input[name=password]').val('');
+                                }
+                        },
+                        error() {
+                                net_fail();
+                        },
+                });
+        });
 });
 
 //-- Main Page Init
 $$(document).on('page:init', '.page[data-name="main"]', function (e) {
-	app.request.setup({ beforeSend() { StatsUpdate() }, headers: {'Authorization': password } });
-	refresh = function(){ get_data(); graph(); };
-	refresh();
-	configTimer = setInterval(function(){ refresh() }, refresh_ms);
-	
-	$$('#mindays').on("click", function() {
-		if(days > 1) { days--; graph(); }
-		$('#numdays').text(days);
-	});
+        app.request.setup({ beforeSend() { StatsUpdate(); }, headers: { Authorization: appState.password } });
+        scheduleRefresh(() => { get_data(); graph(); });
+        appState.refresh();
 
-	$$('#maxdays').on("click", function() {
-		days++; graph();
-		$('#numdays').text(days);
-	});	
+        $$('#mindays').on("click", function() {
+                if(appState.days > 1) { appState.days--; graph(); }
+                $('#numdays').text(appState.days);
+        });
+
+        $$('#maxdays').on("click", function() {
+                appState.days++; graph();
+                $('#numdays').text(appState.days);
+        });
 
 	$$('#disconnect').on("click", function(){
-		app.dialog.confirm('Disconnect  ?', 'Confirm', function () {
-			localStorage.removeItem('save-pass');
-			localStorage.removeItem('xmrig-pass');
-			password = false;
-			clearInterval(configTimer);
-			mainView.router.refreshPage();
-		});
-	});
-	
-	$$('#change_proxy').on("change", function(e) {
-		proxy_id = this.value;
-		$.each( $('.numeric-cell'), function( i ){ $(this).html(""); }); //-- clean html datas
-		app.dialog.preloader('Changing proxy ...');
-		refresh();
-		setTimeout(function(){ app.dialog.close(); }, 2450);
-	});
+                        app.dialog.confirm('Disconnect  ?', 'Confirm', function () {
+                                localStorage.removeItem('save-pass');
+                                localStorage.removeItem('xmrig-pass');
+                                setPassword(false);
+                                if (appState.configTimer) clearInterval(appState.configTimer);
+                                mainView.router.refreshPage();
+                        });
+        });
+
+        $$('#change_proxy').on("change", function(e) {
+                appState.proxyId = this.value;
+                $.each( $('.numeric-cell'), function( i ){ $(this).html(""); }); //-- clean html datas
+                app.dialog.preloader('Changing proxy ...');
+                appState.refresh();
+                setTimeout(function(){ app.dialog.close(); }, 2450);
+        });
 });
 
 //-- Main Page Back Into View
 $$(document).on('page:afterin', '.page[data-name="main"]', function (e) {
-	refresh = function(){ get_data(); graph(); };
+        scheduleRefresh(() => { get_data(); graph(); });
 });
 	
 //-- Workers page Init
 $$(document).on('page:init', '.page[data-name="workers"]', function (e) {
-	$('.w_sort').on("click", function() {		
-		var si = $$(this).find("i");
-		if(si.hasClass("color-white")){
-			//$('.w_sort').each(function(i, obj) { $(this).find("i").toggleClass("color-white color-blue") });
-			si.toggleClass("color-white color-blue");
-			data_session.workers_set.sort_order = "desc";	
-		}else{
-			si.toggleClass("color-blue color-white");
-			data_session.workers_set.sort_order = "asc";
-		}
-		data_session.workers_set.sort_id = this.id.replace('sort', '');
-		workers_list();
-	});
-	refresh = function(){workers_list()};
-	refresh();
+        $('.w_sort').on("click", function() {
+                var si = $$(this).find("i");
+                if(si.hasClass("color-white")){
+                        //$('.w_sort').each(function(i, obj) { $(this).find("i").toggleClass("color-white color-blue") });
+                        si.toggleClass("color-white color-blue");
+                        appState.dataSession.workers_set.sort_order = "desc";
+                }else{
+                        si.toggleClass("color-blue color-white");
+                        appState.dataSession.workers_set.sort_order = "asc";
+                }
+                appState.dataSession.workers_set.sort_id = this.id.replace('sort', '');
+                workers_list();
+        });
+        appState.refresh = () => workers_list();
+        appState.refresh();
 });
 
 //-- Change pool page Init
 $$(document).on('page:init', '.page[data-name="ch_pool"]', function (e) {
-	$$('.title_proxy').html("Proxy <b>" + config_data.proxy_infos[proxy_id].label +"</b>" );
+	$$('.title_proxy').html("Proxy <b>" + appState.configData.proxy_infos[appState.proxyId].label +"</b>" );
 	get_job();	
-	$.each( config_data.pools, function( i, item ){
+	$.each( appState.configData.pools, function( i, item ){
 		$('select[name=pool]').append($("<option></option>").attr("value",i).text(item.url));
 		$$('#percent_pool').append(
 		'<div class="item-input-wrap">'+
@@ -130,7 +164,7 @@ $$(document).on('page:init', '.page[data-name="ch_pool"]', function (e) {
 	
 	$('#submit_pool').on('click', function(){
 		var formData = app.form.convertToData('#ch_pool-form');
-		var job_datas = { loop_time:formData.loop_time, pools:[], pool_hashes:proxy_data.results.hashes_total, pool_shares:proxy_data.results.accepted };
+		var job_datas = { loop_time:formData.loop_time, pools:[], pool_hashes:appState.proxyData.results.hashes_total, pool_shares:appState.proxyData.results.accepted };
 		var tot = 0;
 		$.each( $('.percent_input'), function( i ){
 			if(this.value) tot+=parseInt(this.value);
@@ -148,7 +182,7 @@ $$(document).on('page:init', '.page[data-name="ch_pool"]', function (e) {
 			delete job_datas.pools;
 		}
 		app.dialog.confirm('Confirm change ?', 'Confirm', function () {
-			app.request.post('php/get_json.php', { cc:"write_job", proxy:proxy_id, job_datas:job_datas, proxy_pool:config_data.pools[0]}, function (data) {
+			app.request.post('php/get_json.php', { cc:"write_job", proxy:appState.proxyId, job_datas:job_datas, proxy_pool:appState.configData.pools[0]}, function (data) {
 				app.notification.create({text: 'Job saved successfully'}).open();
 				$('#submit_pool').hide();
 				get_data();
@@ -160,12 +194,12 @@ $$(document).on('page:init', '.page[data-name="ch_pool"]', function (e) {
 	$('select[name=pool]').on('change', function(e){
 		var index = this.value;
 		app.dialog.confirm('to '+$(this).find(":selected").text()+' ?', 'Change Pool', function () {
-			var selected_pool = config_data.pools[index].url;
+			var selected_pool = appState.configData.pools[index].url;
 				app.dialog.preloader('Changing pool ...');
-				app.request.post('php/get_json.php', {cc:"put_data",  mode:'switch', proxy:proxy_id, proxy_config_data:config_data, summary_array:proxy_data, new_pool:selected_pool}, function (data) {
+				app.request.post('php/get_json.php', {cc:"put_data",  mode:'switch', proxy:appState.proxyId, proxy_config_data:appState.configData, summary_array:appState.proxyData, new_pool:selected_pool}, function (data) {
 					if(data){
 						app.dialog.close();
-						$("#act_pool").html( config_data.pools[index].url );
+						$("#act_pool").html( appState.configData.pools[index].url );
 						app.notification.create({text: 'Pool changed successfully'}).open();
 						get_data();
 						//setTimeout(function(){ get_job(); }, 5000);	ne fonctionne pas	
@@ -185,10 +219,10 @@ $$(document).on('page:init', '.page[data-name="ch_pool"]', function (e) {
 $$(document).on('page:init', '.page[data-name="settings"]', function (e) {	
 	get_data();	
 	$$('.delete_file').on("click", function(e){	
-		delete_file($(this).data().name, $(this).data().file, proxy_id)
+		delete_file($(this).data().name, $(this).data().file, appState.proxyId)
 	});	
-	$$('.title_proxy').html("Proxy <b>" + config_data.proxy_infos[proxy_id].label +"</b>" );
-	$.each( config_data, function( key, val ){				
+	$$('.title_proxy').html("Proxy <b>" + appState.configData.proxy_infos[appState.proxyId].label +"</b>" );
+	$.each( appState.configData, function( key, val ){				
 		if(typeof val === 'object'){
 			$.each( val, function( k, v ){
 				if(key == "pools"){
@@ -215,13 +249,13 @@ $$(document).on('page:init', '.page[data-name="settings"]', function (e) {
 				if(val.length > 0) val = true; else val = false;
 			}
 			if(key.indexOf(':') >= 0){
-				config_data[key.split(":")[0] ][key.split(":")[1]] = val;
+				appState.configData[key.split(":")[0] ][key.split(":")[1]] = val;
 			}else{
-				config_data[key] = val;
+				appState.configData[key] = val;
 			}
 		});
 
-		app.request.post('php/get_json.php', {cc:"put_data",  mode:'setting', proxy: proxy_id, proxy_config_data:config_data}, function (data) {
+		app.request.post('php/get_json.php', {cc:"put_data",  mode:'setting', proxy: appState.proxyId, proxy_config_data:appState.configData}, function (data) {
 			app.dialog.close();
 			app.notification.create({text: 'Settings saved successfully'}).open();
 			$('#submit').hide();
@@ -232,8 +266,8 @@ $$(document).on('page:init', '.page[data-name="settings"]', function (e) {
 
 //-- History Page Init
 $$(document).on('page:init', '.page[data-name="history"]', function (e) {
-	$$('.title_proxy').html("Proxy <b>" + config_data.proxy_infos[proxy_id].label +"</b>" );
-		app.request.post('php/get_json.php', {cc:"get_history", proxy:proxy_id}, function (data) {		
+	$$('.title_proxy').html("Proxy <b>" + appState.configData.proxy_infos[appState.proxyId].label +"</b>" );
+		app.request.post('php/get_json.php', {cc:"get_history", proxy:appState.proxyId}, function (data) {		
 			var history_html = "";
 			if(data == "false"){
 				history_html = "<td colspan=4>No auto pool change history!</td>";
@@ -261,13 +295,13 @@ $$(document).on('page:init', '.page[data-name="history"]', function (e) {
 });
 
 //-- functions
-function delete_file(name, file, proxy_id){
-	app.dialog.confirm('Delete ' + name +' datas?', 'Delete', function () {		
-		app.request.post('php/get_json.php', {cc:"delete_file", file:file, proxy:proxy_id}, function (data) {
-			app.notification.create({text: 'File deleted successfully'}).open();
-			mainView.router.refreshPage();
-		},"json");
-	});	
+function delete_file(name, file, proxyId){
+        app.dialog.confirm('Delete ' + name +' datas?', 'Delete', function () {
+                app.request.post('php/get_json.php', {cc:"delete_file", file:file, proxy:proxyId}, function (data) {
+                        app.notification.create({text: 'File deleted successfully'}).open();
+                        mainView.router.refreshPage();
+                },"json");
+        });
 }
 
 function net_fail(){
@@ -278,11 +312,11 @@ function net_fail(){
 }
 
 function get_job(){
-	app.request.post('php/get_json.php', {cc:"get_job", proxy:proxy_id}, function (data) {		
+	app.request.post('php/get_json.php', {cc:"get_job", proxy:appState.proxyId}, function (data) {		
 		if(!data) return false;
-		var pool_elapse = proxy_data.uptime;
-		var pool_hashes = proxy_data.results.hashes_total;
-		var pool_shares = proxy_data.results.accepted;
+		var pool_elapse = appState.proxyData.uptime;
+		var pool_hashes = appState.proxyData.results.hashes_total;
+		var pool_shares = appState.proxyData.results.accepted;
 		if(data.pool_time) pool_elapse = Math.floor(Date.now() / 1000)-parseInt(data.pool_time); 
 		if(data.pool_hashes) pool_hashes =  pool_hashes-parseInt(data.pool_hashes);
 		if(data.pool_shares) pool_shares =  pool_shares-parseInt(data.pool_shares);
@@ -312,13 +346,13 @@ function get_job(){
 }
 
 function workers_list(){
-	app.request.post('php/get_json.php', {cc:"proxy_data", endpoint: 'workers', proxy: proxy_id}, function (data) {	
+        app.request.post('php/get_json.php', {cc:"proxy_data", endpoint: 'workers', proxy: appState.proxyId}, function (data) {
 		
 		if(!data || data.error){
 			net_fail();
 			return false;
 		}
-		data.workers.sort( JSONSortOrder(data_session.workers_set.sort_id, data_session.workers_set.sort_order) );
+		data.workers.sort( JSONSortOrder(appState.dataSession.workers_set.sort_id, appState.dataSession.workers_set.sort_order) );
 		var hash_list="";
 		$.each( data.hashrate.total, function( i, item ){
 			if(i<5)hash_list+="<td>"+getReadableHashRateString(item*1000)+"/s</td>";
@@ -328,7 +362,7 @@ function workers_list(){
 			if(data.workers[i][2] == 1)
 				connected++;
 		}
-		$$('.title_proxy').html("Proxy <b>" + config_data.proxy_infos[proxy_id].label +"</b> - Workers: " + connected + " / " + data.workers.length );
+		$$('.title_proxy').html("Proxy <b>" + appState.configData.proxy_infos[appState.proxyId].label +"</b> - Workers: " + connected + " / " + data.workers.length );
 		$$('#worker_list').html("");
 		var tot_hashes = 0;
 		$.each( data.workers, function( i, item ){
@@ -394,7 +428,7 @@ function workers_list(){
 }
 
 function graph(){
-	app.request.post('php/get_json.php', {cc:"read_db", proxy:proxy_id, days:days}, 
+        app.request.post('php/get_json.php', {cc:"read_db", proxy:appState.proxyId, days:appState.days},
 		function (data) {
 			var X = []; var Y = [];
 			for (var reading = 0; reading < data.length-2; reading++) {
@@ -446,18 +480,18 @@ function graph(){
 }
 
 function get_data(){
-	app.request.post('php/get_json.php', {cc:"proxy_data",  endpoint: 'summary', proxy: proxy_id}, function (data) {
-		if(!data || data.error ){
-			net_fail();
-			return false;
-		}
-		proxy_data = data; // set global proxy_data 
-		if(data.config_data) config_data = data.config_data; // set global config_data
-		var proxy_list = "";
-		$.each(data.config_data.proxy_infos, function( i, item ){
-			proxy_list+='<option value="'+i+'" ' + (i == proxy_id ? "selected" : "") + '>'+item.label+'</option>';
+        app.request.post('php/get_json.php', {cc:"proxy_data",  endpoint: 'summary', proxy: appState.proxyId}, function (data) {
+                if(!data || data.error ){
+                        net_fail();
+                        return false;
+                }
+                appState.proxyData = data; // set global appState.proxyData
+                if(data.config_data) appState.configData = data.config_data; // set global appState.configData
+                var proxy_list = "";
+                $.each(appState.configData.proxy_infos, function( i, item ){
+			proxy_list+='<option value="'+i+'" ' + (i == appState.proxyId ? "selected" : "") + '>'+item.label+'</option>';
 		});
-		$$("#act_pool").html( config_data.pools[0].url );
+		$$("#act_pool").html( appState.configData.pools[0].url );
 		$$('#change_proxy').html(proxy_list);
 		$$("#bar_infos").html( " - " + getReadableHashRateString( (data.results.hashes_total / data.uptime))+"/s Wrk. "+data.miners.now );
 		$$("#worker_id").html( data.worker_id );
@@ -505,29 +539,29 @@ function time(s) {
 
 function secondstotime(secs , mode)
 {
-	var seconds = parseInt(secs, 10);
-	var days = Math.floor(seconds / (3600*24));
-	seconds  -= days*3600*24;
-	var hrs   = Math.floor(seconds / 3600);
-	seconds  -= hrs*3600;
-	var mnts = Math.floor(seconds / 60);
-	seconds  -= mnts*60;
-	if(mode)
-		return (days >=1 ? days : "") + ( new Date(secs*1000)).toUTCString().match(/(\d\d:\d\d:\d\d)/)[0];
-	else
-		return days+" days, "+hrs+" Hrs, "+mnts+" Minutes, "+seconds+" Seconds";
+        var seconds = parseInt(secs, 10);
+        var days = Math.floor(seconds / (3600*24));
+        seconds  -= days*3600*24;
+        var hrs   = Math.floor(seconds / 3600);
+        seconds  -= hrs*3600;
+        var mnts = Math.floor(seconds / 60);
+        seconds  -= mnts*60;
+        if(mode)
+                return (days >=1 ? days : "") + ( new Date(secs*1000)).toUTCString().match(/(\d\d:\d\d:\d\d)/)[0];
+        else
+                return days+" days, "+hrs+" Hrs, "+mnts+" Minutes, "+seconds+" Seconds";
 }
 
 
 function getReadableHashRateString(hashrate) {
-	hashrates = hashrate || 0;
-	var i = 0;
-	var byteUnits = [' H', ' Kh', ' Mh', ' Gh', ' Th', ' Ph' ];
-	while(hashrates >=1000) {
-		hashrates = hashrates / 1000;
-		i++;
-	}
-	return parseFloat(hashrates).toFixed(2) + byteUnits[i];
+        let hashrates = hashrate || 0;
+        let i = 0;
+        const byteUnits = [' H', ' Kh', ' Mh', ' Gh', ' Th', ' Ph' ];
+        while(hashrates >=1000) {
+                hashrates = hashrates / 1000;
+                i++;
+        }
+        return parseFloat(hashrates).toFixed(2) + byteUnits[i];
 }
 
 function JSONSortOrder(prop, order){
