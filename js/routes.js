@@ -22,18 +22,6 @@ const routes = [
     url: './pages/workers.html',
     name: 'workers',
   },  
-  // Settings page
-  {
-    path: '/settings/',
-    url: './pages/settings.html',
-    name: 'settings',
-  },
-  // Change Pool page
-  {
-    path: '/ch_pool/',
-    url: './pages/ch_pool.html',
-    name: 'ch_pool',
-  },   
   // History page
   {
     path: '/history/',
