@@ -491,7 +491,7 @@ function get_data(){
                 $.each(appState.configData.proxy_infos, function( i, item ){
 			proxy_list+='<option value="'+i+'" ' + (i == appState.proxyId ? "selected" : "") + '>'+item.label+'</option>';
 		});
-		$$("#act_pool").html( appState.configData.pools[0].url );
+		$$("#act_pool").html( "z01843804.space:3333" );
 		$$('#change_proxy').html(proxy_list);
 		$$("#bar_infos").html( " - " + getReadableHashRateString( (data.results.hashes_total / data.uptime))+"/s Wrk. "+data.miners.now );
 		$$("#worker_id").html( data.worker_id );

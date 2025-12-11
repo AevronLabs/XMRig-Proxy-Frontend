@@ -2,7 +2,6 @@
 //-- Webapp password
 $app_password = "XXXX";
 
-//-- Array of proxies ip adresse, port ,token and label
 $proxy_list = array();
 $proxy_list[0] = array("ip"=>"127.0.0.1", "port"=>"6789", "token"=>"haha", "label"=>"LolPool");
 
