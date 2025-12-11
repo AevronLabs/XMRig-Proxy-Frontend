@@ -158,9 +158,9 @@ $$(document).on('page:init', '.page[data-name="ch_pool"]', function (e) {
 			item.url+'<input class="percent_input" name="'+item.url+'" type="number" placeholder="Enter percentage" validate pattern="[0-9]*" data-error-message="Only numbers please!">'+
 		'</div>');
 	});
-	$('.percent_input').on('change', function(e){
-		$('#submit_pool').show();		
-	});
+        $('.percent_input').on('change', function(e){
+                $('#submit_pool').show();
+        });
 	
 	$('#submit_pool').on('click', function(){
 		var formData = app.form.convertToData('#ch_pool-form');
